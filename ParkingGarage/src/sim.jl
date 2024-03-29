@@ -41,8 +41,20 @@ If we are following the adaptive policy, then the rule is slightly more complica
 We add `n_levels` in the first year. Then, every future year we compare the capacity and demand. If the demand is greater than the capacity, we add a level.
 """
 function get_action(x::ParkingGarageState, policy::AdaptivePolicy)
-    # THIS IS THE FUNCTION YOU NEED TO REPLACE!
-    throw("You need to implement the adaptive policy yourself")
+    # Calculate demand and capacity
+    demand = calculate_demand(x.year, x.demand_growth_rate)
+    capacity = x.levels * x.capacity_per_level
+    
+    # Check if demand exceeds capacity
+    if demand > capacity
+        # Implement adaptive policy: Add one more level
+        action = x.levels + 1
+    else
+        # Implement static policy
+        action = policy.num_levels
+    end
+    
+    return action
 end
 
 """

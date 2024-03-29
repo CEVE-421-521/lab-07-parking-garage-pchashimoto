@@ -50,6 +50,8 @@ As always:
 ```{julia}
 using Revise
 using ParkingGarage
+push!(LOAD_PATH, "/Users/patriciahashimoto/Desktop/Spring 2024/CEVE 421/Labs/lab-07-parking-garage-pchashimoto/ParkingGarage")
+
 ```
 
 and also regular packages
@@ -82,7 +84,7 @@ let
     years = 1:(sow.n_years)
     demand = [
         ParkingGarage.calculate_demand(year, sow.demand_growth_rate) for year in years
-    ]
+    ] 
     plot(
         years,
         demand;
@@ -101,10 +103,14 @@ end
 This function assumes that the demand is deterministic and that the number of levels is fixed.
 The decision variable is the number of levels of the garage to build.
 If we consider a single SOW, we can calculate the NPV of the profits for a given policy.
-
+    
 ```{julia}
 let
-    sow = ParkingGarageSOW(; demand_growth_rate=80.0, n_years=20, discount_rate=0.12)
+    sow = ParkingGarageSOW()
+    years = 1:(sow.n_years)
+    demand = [
+        ParkingGarage.calculate_demand(year, sow.demand_growth_rate) for year in years
+    ]
     n_levels = 2:12
     policies = [StaticPolicy(i) for i in n_levels]
     profits = [simulate(sow, policy) for policy in policies]
@@ -130,8 +136,89 @@ Reproduce this figure, using our model.
 Specifically:
 
 1. Generate an ensemble of SOWs. Justify how you are sampling the three parameters (`n_years`, `demand_growth_rate`, and `discount_rate`). I suggest to keep `n_years` as a constant, and perhaps to keep the discount rate constant as well.
+    I will follow the parameters used in the study for number of years and discount rate, keeping the number of years constant at n_years = 20 and the discount rate constant at 12%.
+
+    A distribution for demand growth rate is defined based on the paper's assumption that future growth rate could be off 50% from the projection and has a 15% volatility.
+
+```{julia}
+using Distributions  # Import the Distributions package for sampling from distributions
+
+function demand_distribution(long_term_average::Float64)
+    upper_bound = 1.5 * long_term_average
+    lower_bound = 0.5 * long_term_average
+
+    volatility = 0.15  # 15%
+    σ = volatility * long_term_average
+
+    μ = (upper_bound + lower_bound) / 2
+
+    distribution = Normal(μ, σ)
+    return distribution
+end
+
+num_sows = 2000  
+
+n_years = 20
+demand_growth_rate_distribution = demand_distribution(80.)
+discount_rate = .12
+
+# Generate an ensemble of SOWs
+sows = []
+for _ in 1:num_sows
+    demand_growth_rate = rand(demand_growth_rate_distribution)    
+
+    sow = ParkingGarageSOW(
+        n_years = n_years,
+        demand_growth_rate = demand_growth_rate
+    )
+    
+    push!(sows, sow)
+end
+
+
+```
+
+
+
 1. For each SOW, calculate the NPV for each policy.
+
+```{julia}
+n_levels = 2:12
+policies = [StaticPolicy(i) for i in n_levels]
+
+ensemble_npv = zeros(Float64, length(sows), length(policies))
+
+for (i, sow) in enumerate(sows)
+    for (j, policy) in enumerate(policies)
+        profits = simulate(sow, policy)
+        
+        npv = sum(profits ./ (1 .+ sow.discount_rate) .^ (1:length(profits)))
+        
+        ensemble_npv[i, j] = npv
+    end
+end
+```
+
 1. Calculate the average NPV for each number of levels and plot.
+
+```{julia}
+avg_npv = mean(ensemble_npv, dims=1)
+
+# Extract the average NPV values
+avg_npv_values = vec(avg_npv)
+
+plot(
+    n_levels,
+    avg_npv_values,
+    xlabel = "Number of levels",
+    ylabel = "Average NPV (Million USD)",
+    legend = false,
+    title = "Average NPV for Each Number of Levels",
+    marker = :circle
+)
+
+```
+
 
 # Adaptive case
 
@@ -143,6 +230,72 @@ Specifically, you need to edit the `function get_action(x::ParkingGarageState, p
 You'll need to use `if...else...end` statements to implement the adaptive policy.
 We'll talk about this in class!
 
+
+```{julia}
+
+
+# Generate an ensemble of SOWs
+adaptive_sows = []
+static_npv = zeros(Float64, num_sows)
+adaptive_npv = zeros(Float64, num_sows)
+
+for i in 1:num_sows
+    demand_growth_rate = rand(demand_growth_rate_distribution)
+
+    adaptive_sow = ParkingGarageSOW(
+        demand_growth_rate = demand_growth_rate,
+        discount_rate = discount_rate
+    )
+    adaptive_sow. # Set adaptive policy for the adaptive SOW
+    
+    # Simulate adaptive policy and calculate NPV
+    adaptive_npv[i] = simulate(adaptive_sow, AdaptivePolicy(2))  # Assuming 2 levels for adaptive policy
+    
+    push!(adaptive_sows, adaptive_sow)  # Store both static and adaptive SOWs in the ensemble
+end
+
+
+```
+
 Once you've implemented this function, you can simulate the adaptive policy and compare the NPV to the static policy.
 Compare the fixed and adaptive policies for both the deterministic (single SOW) and stochastic (ensemble of SOWs) cases.
+
+
+```{julia}
+n_levels = 2:12
+policies = [StaticPolicy(i) for i in n_levels]
+
+ensemble_npv = zeros(Float64, length(adaptive_sows), length(policies))
+
+for (i, adaptive_sows) in enumerate(sows)
+    for (j, policy) in enumerate(policies)
+        profits = simulate(sow, policy)
+        
+        npv = sum(profits ./ (1 .+ adaptive_sows.discount_rate) .^ (1:length(profits)))
+        
+        ensemble_npv[i, j] = npv
+    end
+end
+```
+
+1. Calculate the average NPV for each number of levels and plot.
+
+```{julia}
+avg_npv = mean(ensemble_npv, dims=1)
+
+# Extract the average NPV values
+avg_npv_values = vec(avg_npv)
+
+plot(
+    n_levels,
+    avg_npv_values,
+    xlabel = "Number of levels",
+    ylabel = "Average NPV (Million USD)",
+    legend = false,
+    title = "Average NPV for Each Number of Levels",
+    marker = :circle
+)
+
+```
+
 Plot the NPV as a function of the number of levels for each case.
